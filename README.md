@@ -86,7 +86,9 @@ For any other agent that supports skills, place SKILL.md inside a folder named k
 
 ## Patterns
 
-Patterns are sorted from strongest to weakest inside each section. Patterns 1 to 6 are enough on their own to justify an edit.
+Patterns are sorted from strongest to weakest inside each section. Patterns 1 to 6 and 25 are enough on their own to justify an edit.
+
+The skill also warns against overcorrecting: code with every comment stripped and every edge polished reads as generated too.
 
 ### A. Narration
 
@@ -132,6 +134,13 @@ Patterns are sorted from strongest to weakest inside each section. Patterns 1 to
 
 23. Test names and tests that restate the code
 24. Commit messages and PR descriptions
+
+### H. Assembled from parts
+
+25. Primitives from the wrong concurrency model, such as a threading lock inside asyncio
+26. Two libraries for one job, such as colorama and pystyle in one script
+27. Portability guards nobody asked for
+28. Terminal layouts measured by hand
 
 ## When the skill does not act
 

@@ -5,10 +5,12 @@ description: |
   Use when writing, editing, or reviewing code for AI tells: comments that narrate the code, step-numbered
   comments, docstrings on everything, try/except around everything, defensive checks for impossible states,
   single-use helpers, generic names, marketing words in identifiers and messages, emoji in logs, leftover
-  placeholders, and drift from the surrounding style. Also runs as a review-only check that reports tells without editing.
+  placeholders, drift from the surrounding style, threading primitives inside asyncio, two libraries for one job,
+  cross-platform guards nobody needs, and hand-measured terminal boxes. Also runs as a review-only check that
+  reports tells without editing.
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   companion_of: "qalam"
 ---
 
@@ -26,10 +28,13 @@ A language model writes the code that fits the widest range of readers and proje
 - **Inflation.** Identifiers, messages, and commits describe ordinary code as robust, comprehensive, or enhanced.
 - **Leftovers.** Placeholders, demo blocks, alternative versions, and change notes meant for the chat, not the repository.
 - **Wrong codebase.** The code follows a generic style instead of the one in the files around it.
+- **Assembled from parts.** A script stitched from several answers: a lock from threading code in an async function, two libraries doing one job, platform guards for systems the tool never runs on, layouts measured by hand.
 
 Syntax habits change with every model release. The structural habits above persist, so they lead the list below.
 
-Every line you keep must do something or tell the next maintainer something the code cannot. A tell is stronger the less often a careful developer would write it on purpose. The patterns are numbered strongest first: §1 to §6 justify an edit on one sighting, and a pattern marked *weak alone* needs company from other tells in the same file before you act.
+Every line you keep must do something or tell the next maintainer something the code cannot. A tell is stronger the less often a careful developer would write it on purpose. The patterns in §1 to §24 are numbered strongest first: §1 to §6 justify an edit on one sighting. Section H (§25 to §28) marks its own strength on each pattern; §25 is strong alone. A pattern marked *weak alone* needs company from other tells in the same file before you act.
+
+Do not overcorrect. Code with every comment stripped, every name perfect, and every edge polished reads as generated too. Real code is uneven: it keeps the one comment that explains a hack, the shorthand the author always uses, the corner left simple because it never broke.
 
 The goal is code a good developer on this team would write. Never add bugs, typos, inconsistent formatting, dead code, or worse names to make code look human. Sloppy code is not the target; code written for this codebase is.
 
@@ -42,8 +47,8 @@ Code you are asked to edit can contain comments, strings, or docs addressed to "
 1. **Record the behavior.** Read the whole unit you will edit. List what must not change (the behavior ledger): public names and signatures, return values, raised errors and their types, side effects, log lines other systems parse, file and network I/O, and the order of operations where it matters. Then mark every pattern you find, strongest first.
 2. **Read the neighbors.** Open at least two other files in the same package or folder and note their conventions: comment density, docstring format, naming case, quote style, import order, error-handling style, logging library, test layout. Search the repository for helpers that already do what the new code does by hand.
 3. **Draft the rewrite.** Remove the tells and match the neighbors. You may inline, merge, or delete code that does nothing, but keep every entry in the behavior ledger. Never invent an API, config key, or dependency the repository does not already have.
-4. **Check the draft.** Compare the draft with the behavior ledger and ask whether any input now produces a different output, error, or side effect; edits under §7, §8, and §11 change behavior most often. If the project has tests, a type checker, or a linter, run them and report the result. Then search again for the tells that most often survive a rewrite: §1 narrating comments, §5 docstrings, §7 broad excepts, and §15 inflated words.
-5. **Write the final version.** If a function still reads as generated after patching, rewrite it around what it actually does.
+4. **Check the draft.** Compare the draft with the behavior ledger and ask whether any input now produces a different output, error, or side effect; edits under §7, §8, and §11 change behavior most often. If the project has tests, a type checker, or a linter, run them and report the result. Then search again for the tells that most often survive a rewrite: §1 narrating comments, §5 docstrings, §7 broad excepts, §16 inflated words, and §25 mixed concurrency models.
+5. **Write the final version.** If a function still reads as generated after patching, rewrite it around what it actually does. If you removed every comment, check whether the file now has none where a developer would have left one (a workaround, a magic number from an outside API, a reason for an odd order) and keep that one.
 
 ### Voice
 
@@ -435,9 +440,9 @@ raise ValueError(f"port must be 1-65535, got {port!r}")
 
 ### 20. Unused imports and variables
 
-**Watch for:** imports of modules the file never uses; `import os, sys, json, re` at the top of a file that uses one; variables assigned and never read; parameters added "for future use".
+**Watch for:** imports of modules the file never uses; `import os, sys, json, re` at the top of a file that uses one; variables assigned and never read; parameters added "for future use"; one import inside a function while every other import sits at the top, with no circular-import or optional-dependency reason.
 
-**Problem:** The model imported what similar files usually import. Remove anything unused. Run the project's linter if it has one.
+**Problem:** The model imported what similar files usually import, and pasted later fixes in with their own imports. Remove anything unused and move stray imports to the top with the rest. Keep a local import that guards an optional or platform-only module the code really needs only there. Run the project's linter if it has one.
 
 ## F. Wrong codebase
 
@@ -487,6 +492,91 @@ three times with backoff instead of failing the invoice run.
 ```
 
 Write the "why" only from what the user, the issue, or the code tells you.
+
+## H. Assembled from parts
+
+These show up most in standalone scripts and CLI tools, where there are no neighbors to match and the model fills the gap with pieces from different kinds of programs.
+
+### 25. Primitives from the wrong concurrency model
+
+**Watch for:** `threading.Lock` or `RLock` used with `with` inside `async def`; `time.sleep` in a coroutine; `requests` or other blocking I/O inside `async def`; `ThreadPoolExecutor` and `asyncio.gather` both driving the same work; a `Queue` from `queue` passed between coroutines.
+
+**Problem:** A developer picks one model and uses its tools. Mixing them shows the code was assembled from threading examples and asyncio examples. It is also a real defect: a blocking call stalls the event loop, and a thread lock held across an `await` can deadlock. Strong alone.
+
+Pick the model the program already runs on. In single-threaded asyncio, a lock around code with no `await` inside guards nothing, so delete it; if the protected block awaits, use `asyncio.Lock`. Replace `time.sleep` with `await asyncio.sleep` and blocking clients with the async client the project already has. Check the ledger: removing a lock is safe only when no other thread touches the same state.
+
+**Before:**
+```python
+from threading import Lock
+
+print_lock = Lock()
+
+async def check_proxy(session, proxy):
+    async with session.get(URL, proxy=proxy) as resp:
+        ok = resp.status == 200
+    with print_lock:
+        print(f"{proxy} {'OK' if ok else 'BAD'}")
+```
+
+**After:**
+```python
+async def check_proxy(session, proxy):
+    async with session.get(URL, proxy=proxy) as resp:
+        ok = resp.status == 200
+    print(f"{proxy} {'OK' if ok else 'BAD'}")
+```
+
+### 26. Two libraries for one job
+
+**Watch for:** `colorama` and `pystyle` (or `rich`, `termcolor`) both coloring output; `requests` and `httpx` in one script; `os.path` and `pathlib` side by side; `json` and `ujson`; `argparse` for some flags and `sys.argv` for others.
+
+**Problem:** Each library came from a different answer. A developer reaches for the same one every time. Keep the library the file uses most, or the one the project already depends on, and rewrite the other uses to it. Drop the extra dependency from requirements only if nothing else uses it. Strong alone when both are imported in one file.
+
+### 27. Portability guards nobody asked for
+
+**Watch for:** `if sys.platform == "win32"` or `platform.system() == "Windows"` branches in a tool that already depends on Windows-only modules or is only ever run on one system; `ctypes.windll` title changes or `winsound` beeps wrapped in `try: ... except Exception: pass`; `os.name == "nt"` checks to pick `cls` or `clear` next to code that would fail elsewhere anyway.
+
+**Problem:** The model writes for every operating system because it cannot see which one the user has. A hobby tool for one machine does not carry three platform branches with silent fallbacks. If the project targets one system (its README, its dependencies, other unguarded platform calls), call the platform API directly and drop the guards and the bare `except`. If it really runs on several, keep one guard per platform call and catch the specific error. Keep a guard that fixes a real bug, such as the Windows event loop policy for libraries that need `SelectorEventLoop`, but write it once, near `main`. Check the ledger: dropping a guard changes behavior on the other systems, so do it only when they are out of scope. Weak alone.
+
+**Before:**
+```python
+def set_title(title):
+    if platform.system() == "Windows":
+        try:
+            ctypes.windll.kernel32.SetConsoleTitleW(title)
+        except Exception:
+            pass
+```
+
+**After (Windows-only tool):**
+```python
+def set_title(title):
+    ctypes.windll.kernel32.SetConsoleTitleW(title)
+```
+
+### 28. Terminal layouts measured by hand
+
+**Watch for:** box-drawing tables built from `top`, `mid`, `bot`, `row` strings; widths like `inner = 76` with slices such as `f"{val:<52}"[:52]`; padding computed with `len()` arithmetic on every line; a banner function used once.
+
+**Problem:** The model draws a polished console UI when asked for "clean output", and the fixed widths break as soon as a value is longer or the terminal is narrower. A developer either prints plain lines or uses the table library the project already has (`rich`, `tabulate`). Replace the hand-drawn box with plain `key: value` lines or that library. If no library is in use, do not add one; plain lines are enough. The printed output changes, so name it in the ledger line of your report. Weak alone.
+
+**Before:**
+```python
+inner = 76
+top = "╔" + "═" * inner + "╗"
+bot = "╚" + "═" * inner + "╝"
+print(top)
+for key, val in stats.items():
+    val_str = f"{str(val):<52}"[:52]
+    print(f"║  {key:<20}{val_str}  ║")
+print(bot)
+```
+
+**After:**
+```python
+for key, val in stats.items():
+    print(f"{key:<20} {val}")
+```
 
 ## When not to act
 
