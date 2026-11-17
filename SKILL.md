@@ -6,11 +6,11 @@ description: |
   comments, docstrings on everything, try/except around everything, defensive checks for impossible states,
   single-use helpers, generic names, marketing words in identifiers and messages, emoji in logs, leftover
   placeholders, drift from the surrounding style, threading primitives inside asyncio, two libraries for one job,
-  cross-platform guards nobody needs, and hand-measured terminal boxes. Also runs as a review-only check that
+  cross-platform guards nobody needs, hand-measured terminal boxes, and timers started before a semaphore. Also runs as a review-only check that
   reports tells without editing.
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
   companion_of: "qalam"
 ---
 
@@ -32,9 +32,11 @@ A language model writes the code that fits the widest range of readers and proje
 
 Syntax habits change with every model release. The structural habits above persist, so they lead the list below.
 
-Every line you keep must do something or tell the next maintainer something the code cannot. A tell is stronger the less often a careful developer would write it on purpose. The patterns in §1 to §24 are numbered strongest first: §1 to §6 justify an edit on one sighting. Section H (§25 to §28) marks its own strength on each pattern; §25 is strong alone. A pattern marked *weak alone* needs company from other tells in the same file before you act.
+Every line you keep must do something or tell the next maintainer something the code cannot. A tell is stronger the less often a careful developer would write it on purpose. The patterns in §1 to §24 are numbered strongest first: §1 to §6 justify an edit on one sighting. Section H (§25 to §29) marks its own strength on each pattern; §25 and §29 are strong alone. A pattern marked *weak alone* needs company from other tells in the same file before you act.
 
 Do not overcorrect. Code with every comment stripped, every name perfect, and every edge polished reads as generated too. Real code is uneven: it keeps the one comment that explains a hack, the shorthand the author always uses, the corner left simple because it never broke.
+
+The same holds for names. A file where every function is a matching verb_noun pair (`parse_proxy`, `load_proxies`, `run_checker`, `set_console_title`, `play_beep`) reads as one generated pass. Do not rename good names to break the pattern, and never make a name worse. Instead, when the user has other code of their own, take their naming habits from it (their abbreviations, their verbs, how short they go in small scopes) and use those for names the change already touches. Without any sample, leave the names alone.
 
 The goal is code a good developer on this team would write. Never add bugs, typos, inconsistent formatting, dead code, or worse names to make code look human. Sloppy code is not the target; code written for this codebase is.
 
@@ -576,6 +578,34 @@ print(bot)
 ```python
 for key, val in stats.items():
     print(f"{key:<20} {val}")
+```
+
+### 29. Timers that measure the wrong span
+
+**Watch for:** `t0 = time.perf_counter()` (or `time.time()`, `Date.now()`) taken before `async with sem:`, `with lock:`, `pool.submit`, or a queue `get`, then used as the latency of the work inside; a "ping" or "response time" that includes connection setup, retries, or the wait for a slot; a duration computed after logging or parsing that should not count.
+
+**Problem:** The model writes the function top to bottom, so the timer goes at the top. The number it reports then includes time spent waiting for a concurrency slot, and under load every result looks slow. A developer who cares about the number starts the clock right before the call being measured. Strong alone, because it is a defect as well as a tell.
+
+Move the start inside the block that holds the slot, right before the request, and the stop right after the response arrives. The reported numbers change, so name that in the ledger line of your report.
+
+**Before:**
+```python
+async def check_proxy(session, sem, proxy):
+    t0 = time.perf_counter()
+    async with sem:
+        async with session.get(URL, proxy=proxy, timeout=TIMEOUT) as resp:
+            ok = resp.status == 200
+    ping = (time.perf_counter() - t0) * 1000
+```
+
+**After:**
+```python
+async def check_proxy(session, sem, proxy):
+    async with sem:
+        t0 = time.perf_counter()
+        async with session.get(URL, proxy=proxy, timeout=TIMEOUT) as resp:
+            ok = resp.status == 200
+        ping = (time.perf_counter() - t0) * 1000
 ```
 
 ## When not to act

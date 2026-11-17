@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0
+
+Release date 2026-11-17
+
+- Pattern 29 for timers that measure the wrong span, such as a latency clock started before acquiring a semaphore
+- Note on uniform verb_noun naming across a file, and taking naming habits from the user's own code instead of renaming for its own sake
+
 ## 1.1.0
 
 Release date 2026-11-17

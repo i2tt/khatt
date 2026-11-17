@@ -86,9 +86,9 @@ For any other agent that supports skills, place SKILL.md inside a folder named k
 
 ## Patterns
 
-Patterns are sorted from strongest to weakest inside each section. Patterns 1 to 6 and 25 are enough on their own to justify an edit.
+Patterns are sorted from strongest to weakest inside each section. Patterns 1 to 6, 25, and 29 are enough on their own to justify an edit.
 
-The skill also warns against overcorrecting: code with every comment stripped and every edge polished reads as generated too.
+The skill also warns against overcorrecting: code with every comment stripped, every edge polished, and every function named in the same verb_noun shape reads as generated too.
 
 ### A. Narration
 
@@ -141,6 +141,7 @@ The skill also warns against overcorrecting: code with every comment stripped an
 26. Two libraries for one job, such as colorama and pystyle in one script
 27. Portability guards nobody asked for
 28. Terminal layouts measured by hand
+29. Timers that measure the wrong span, such as a ping clock started before the semaphore
 
 ## When the skill does not act
 
