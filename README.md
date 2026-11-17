@@ -152,3 +152,6 @@ Patterns are sorted from strongest to weakest inside each section. Patterns 1 to
 ## License
 
 Khatt is released under the MIT License. See [LICENSE](LICENSE)
+
+## Credits
+
