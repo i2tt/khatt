@@ -154,4 +154,8 @@ Patterns are sorted from strongest to weakest inside each section. Patterns 1 to
 Khatt is released under the MIT License. See [LICENSE](LICENSE)
 
 ## Credits
-
+<p align="center">
+  <a href="https://github.com/i2tt">
+    <img src="https://img.shields.io/badge/AgentcYper-GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="i2tt" />
+  </a>
+  
