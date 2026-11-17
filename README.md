@@ -4,7 +4,7 @@ Khatt is an agent skill that rewrites code which reads as AI-generated so that i
 
 The skill is a single file named SKILL.md with no plugins and no build step
 
-## Before and after .
+## Before and after 
 
 Before
 
